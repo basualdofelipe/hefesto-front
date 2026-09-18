@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClientFetch } from '@/lib/api-client';
+import { TN_GATEWAYS_WITH_PLAN_RATES } from '@/constants/tiendanube';
 import type { TnPaymentGateway, TnGatewayRate, TnPlan } from './types';
 import { PAYMENT_METHOD_LABELS } from './types';
 
@@ -51,12 +52,53 @@ function GatewayHeader({
   );
 }
 
+/**
+ * One row per (payment method, withdrawal days): the selected plan's row when
+ * it exists, otherwise the shared planId-null row (D-07). First-seen order kept.
+ */
+function selectVisibleRates(
+  rates: TnGatewayRate[],
+  selectedPlan: TnPlan,
+): TnGatewayRate[] {
+  const groups = new Map<string, TnGatewayRate[]>();
+  for (const rate of rates) {
+    const key = `${rate.paymentMethod}|${rate.withdrawalDays}`;
+    const group = groups.get(key);
+    if (group) {
+      group.push(rate);
+    } else {
+      groups.set(key, [rate]);
+    }
+  }
+
+  const visible: TnGatewayRate[] = [];
+  for (const group of groups.values()) {
+    const chosen =
+      group.find((r) => r.planId === selectedPlan.id) ??
+      group.find((r) => r.planId === null) ??
+      group[0];
+    visible.push(chosen);
+  }
+  return visible;
+}
+
 function GatewaySectionContent({
   gateway,
   rates,
+  selectedPlan,
 }: GatewaySectionProps): ReactElement {
   const { data: session } = useSession();
   const token = session?.accessToken ?? '';
+
+  const visibleRates = useMemo(
+    () => selectVisibleRates(rates, selectedPlan),
+    [rates, selectedPlan],
+  );
+
+  // Only plan-scoped gateways send planId; the server stores null otherwise (D-06).
+  const scopedPlanId = TN_GATEWAYS_WITH_PLAN_RATES.includes(gateway.slug)
+    ? selectedPlan.id
+    : undefined;
 
   const [rateValues, setRateValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -91,6 +133,7 @@ function GatewaySectionContent({
             paymentMethod: rate.paymentMethod,
             withdrawalDays: rate.withdrawalDays,
             ratePercent: parsed,
+            planId: scopedPlanId,
           }),
         },
       );
@@ -112,21 +155,22 @@ function GatewaySectionContent({
             <TableHead>Medio de pago</TableHead>
             <TableHead>Tiempo de retiro</TableHead>
             <TableHead>Tasa (%)</TableHead>
+            <TableHead>Plan</TableHead>
             <TableHead>Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rates.length === 0 ? (
+          {visibleRates.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={4}
+                colSpan={5}
                 className='text-muted-foreground h-16 text-center'
               >
                 No hay tasas configuradas para esta pasarela.
               </TableCell>
             </TableRow>
           ) : (
-            rates.map((rate) => (
+            visibleRates.map((rate) => (
               <TableRow key={rate.id}>
                 <TableCell className='font-semibold'>
                   {PAYMENT_METHOD_LABELS[rate.paymentMethod] ??
@@ -144,6 +188,13 @@ function GatewaySectionContent({
                     className='w-24'
                     disabled={savingId === rate.id}
                   />
+                </TableCell>
+                <TableCell>
+                  <Badge variant='outline'>
+                    {rate.planId === selectedPlan.id
+                      ? `Plan ${selectedPlan.label}`
+                      : 'Todos los planes'}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <Button
