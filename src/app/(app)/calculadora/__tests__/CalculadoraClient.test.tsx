@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockUseSession = jest.fn(() => ({
@@ -218,7 +224,9 @@ describe('CalculadoraClient', () => {
     await user.click(screen.getByText('Set Gateway'));
     await user.type(screen.getByLabelText('Precio de venta'), '130');
 
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -250,7 +258,9 @@ describe('CalculadoraClient', () => {
     await user.click(screen.getByText('Select Product'));
     await user.click(screen.getByText('Set Gateway'));
     await user.type(screen.getByLabelText('Precio de venta'), '130');
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
@@ -258,7 +268,9 @@ describe('CalculadoraClient', () => {
     fireEvent.change(screen.getByLabelText('Costo real del envío (con IVA)'), {
       target: { value: '5000' },
     });
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -286,7 +298,9 @@ describe('CalculadoraClient', () => {
       await user.click(screen.getByText('Toggle Mode'));
       await user.type(screen.getByLabelText('Ganancia deseada'), '0');
 
-      jest.runAllTimers();
+      await act(async () => {
+        jest.runAllTimers();
+      });
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -314,7 +328,9 @@ describe('CalculadoraClient', () => {
         target: { value: '-5' },
       });
 
-      jest.runAllTimers();
+      await act(async () => {
+        jest.runAllTimers();
+      });
 
       expect(global.fetch).not.toHaveBeenCalled();
     });
@@ -327,7 +343,9 @@ describe('CalculadoraClient', () => {
     await user.click(screen.getByText('Select Product Without Cost'));
     await user.click(screen.getByText('Set Gateway'));
     await user.type(screen.getByLabelText('Precio de venta'), '130');
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     expect(global.fetch).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
@@ -336,7 +354,9 @@ describe('CalculadoraClient', () => {
     // Inverse mode is gated the same way
     await user.click(screen.getByText('Toggle Mode'));
     await user.type(screen.getByLabelText('Ganancia deseada'), '50');
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     expect(global.fetch).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
@@ -345,7 +365,9 @@ describe('CalculadoraClient', () => {
     // Selecting a product with cost afterwards calculates normally
     await user.click(screen.getByText('Toggle Forward'));
     await user.click(screen.getByText('Select Product'));
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -370,7 +392,9 @@ describe('CalculadoraClient', () => {
 
     await user.type(screen.getByLabelText('Precio de venta'), '999');
 
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
