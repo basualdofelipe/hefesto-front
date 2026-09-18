@@ -190,11 +190,25 @@ function GatewaySectionContent({
                   />
                 </TableCell>
                 <TableCell>
-                  <Badge variant='outline'>
-                    {rate.planId === selectedPlan.id
-                      ? `Plan ${selectedPlan.label}`
-                      : 'Todos los planes'}
-                  </Badge>
+                  <span className='flex items-center gap-2'>
+                    <Badge variant='outline'>
+                      {rate.planId === selectedPlan.id
+                        ? `Plan ${selectedPlan.label}`
+                        : 'Todos los planes'}
+                    </Badge>
+                    {/* WR-03 / D-06: for a plan-scoped gateway the PUT always
+                        carries the selected plan, so saving the shared row does
+                        not edit "all plans" — it forks a row for this plan and
+                        the other plans keep the old value. Say so. */}
+                    {scopedPlanId !== undefined && rate.planId === null && (
+                      <span
+                        className='text-muted-foreground text-xs'
+                        title={`Guardar crea una tasa solo para Plan ${selectedPlan.label}; los demas planes conservan la tasa compartida.`}
+                      >
+                        Guardar → solo Plan {selectedPlan.label}
+                      </span>
+                    )}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <Button

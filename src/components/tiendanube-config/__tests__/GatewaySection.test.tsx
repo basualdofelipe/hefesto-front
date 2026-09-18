@@ -187,6 +187,42 @@ describe('GatewaySection per-plan rows (R5, D-07)', () => {
     ).toBeInTheDocument();
   });
 
+  it('a shared row on a plan-scoped gateway says Guardar forks it for the selected plan (WR-03)', () => {
+    render(
+      <GatewaySection
+        gateway={PAGO_NUBE}
+        rates={pnRates}
+        selectedPlan={ESCALA}
+      />,
+    );
+
+    // billetera only has the shared row: the badge stays, the hint says what save does
+    const billeteraRow = rowByMethod('Billetera Virtual');
+    expect(
+      within(billeteraRow).getByText('Todos los planes'),
+    ).toBeInTheDocument();
+    expect(
+      within(billeteraRow).getByText('Guardar → solo Plan Escala'),
+    ).toBeInTheDocument();
+
+    // tarjeta shows the Escala-specific row: no fork hint
+    const tarjetaRow = rowByMethod('Tarjeta deb/cred');
+    expect(within(tarjetaRow).queryByText(/Guardar →/)).not.toBeInTheDocument();
+  });
+
+  it('a shared row on a gateway without plan rates shows no fork hint (D-06)', () => {
+    render(
+      <GatewaySection
+        gateway={MERCADO_PAGO}
+        rates={mpRates}
+        selectedPlan={ESENCIAL}
+      />,
+    );
+
+    expect(screen.getByText('Todos los planes')).toBeInTheDocument();
+    expect(screen.queryByText(/Guardar →/)).not.toBeInTheDocument();
+  });
+
   it('saving a Pago Nube rate sends planId = selected plan id (D-06)', async () => {
     render(
       <GatewaySection
