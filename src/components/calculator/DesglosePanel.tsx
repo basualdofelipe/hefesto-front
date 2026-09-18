@@ -91,7 +91,7 @@ export function DesglosePanel({
         <div className='mb-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-950/30'>
           <LineItem
             label='Precio de venta necesario'
-            value={formatArs(inverseResult.precioVenta)}
+            value={formatArs(inverseResult.requiredSellingPrice)}
             variant='highlight-blue'
             bold
             large
@@ -102,7 +102,7 @@ export function DesglosePanel({
       {/* Total paid by client */}
       <LineItem
         label='Total pagado por cliente'
-        value={formatArs(result.totalCliente)}
+        value={formatArs(result.customerTotal)}
         bold
       />
 
@@ -110,34 +110,34 @@ export function DesglosePanel({
 
       {/* Deductions */}
       <LineItem
-        label={`Comision pasarela (${formatPercent(result.tasaBase)} + IVA = ${formatPercent(result.tasaConIVA)})`}
-        value={`-${formatArs(result.comisionPasarela)}`}
+        label={`Comisión pasarela (${formatPercent(result.baseRate)} + IVA = ${formatPercent(result.rateWithIva)})`}
+        value={`-${formatArs(result.gatewayFee)}`}
         variant='negative'
       />
 
       {installments > 1 && (
         <LineItem
-          label={`Financiacion cuotas (${formatPercent(result.tasaCuotas)})`}
-          value={`-${formatArs(result.costoFinanciacion)}`}
+          label={`Financiación cuotas (${formatPercent(result.installmentRate)}, según config)`}
+          value={`-${formatArs(result.financingCost)}`}
           variant='negative'
         />
       )}
 
       <LineItem
-        label='CPT Tiendanube'
+        label='CPT Tiendanube (según config)'
         value={`-${formatArs(result.cpt)}`}
         variant='negative'
       />
 
       <LineItem
         label='Retenciones IIBB'
-        value={`-${formatArs(result.retencionIIBB)}`}
+        value={`-${formatArs(result.iibbWithholding)}`}
         variant='negative'
       />
 
       <LineItem
         label='Neto recibido'
-        value={formatArs(result.netoRecibido)}
+        value={formatArs(result.netReceived)}
         bold
       />
 
@@ -145,52 +145,66 @@ export function DesglosePanel({
 
       {/* IVA breakdown */}
       <LineItem
-        label='IVA debito fiscal'
-        value={`-${formatArs(result.ivaDebito)}`}
+        label='IVA débito fiscal'
+        value={`-${formatArs(result.ivaDebit)}`}
         variant='negative'
       />
       <LineItem
-        label='IVA credito producto'
-        value={`+${formatArs(result.ivaCreditoProducto)}`}
+        label='IVA crédito producto'
+        value={`+${formatArs(result.ivaCreditProduct)}`}
         variant='positive'
         indent
       />
       <LineItem
-        label='IVA credito comision'
-        value={`+${formatArs(result.ivaCreditoComision)}`}
+        label='IVA crédito comisión'
+        value={`+${formatArs(result.ivaCreditGatewayFee)}`}
+        variant='positive'
+        indent
+      />
+      <LineItem
+        label='IVA crédito envío'
+        value={`+${formatArs(result.ivaCreditShipping)}`}
         variant='positive'
         indent
       />
       <LineItem
         label='IVA neto a pagar'
-        value={`-${formatArs(result.ivaNeto)}`}
+        value={`-${formatArs(result.ivaNet)}`}
         variant='negative'
       />
 
-      {/* Product cost */}
+      {/* Product and shipping costs */}
       <LineItem
         label='Costo producto + IVA'
-        value={`-${formatArs(result.costoProductoConIVA)}`}
+        value={`-${formatArs(result.productCostWithIva)}`}
+        variant='negative'
+      />
+      <LineItem
+        label='Costo de envío (con IVA)'
+        value={`-${formatArs(result.shippingCost)}`}
         variant='negative'
       />
 
       <Separator className='my-2' />
 
-      {/* Ganancia real -- highlighted green, large */}
+      {/* Real profit -- highlighted green, large */}
       <div className='rounded-lg bg-green-50 p-3 dark:bg-green-950/30'>
         <LineItem
-          label={`GANANCIA REAL (margen ${formatPercent(result.margen)})`}
-          value={formatArs(result.gananciaReal)}
+          label={`GANANCIA REAL (margen ${formatPercent(result.marginPercent)})`}
+          value={formatArs(result.realProfit)}
           variant='highlight-green'
           bold
           large
         />
       </div>
 
-      {/* Disclaimer */}
+      {/* Disclaimers */}
       <p className='text-muted-foreground pt-3 text-xs'>
         Valores aproximados sujetos a variaciones de tasas y redondeos de la
         pasarela de pago.
+      </p>
+      <p className='text-muted-foreground text-xs'>
+        La fórmula asume Responsable Inscripto (IVA débito/crédito).
       </p>
     </div>
   );
