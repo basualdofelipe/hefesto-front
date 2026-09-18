@@ -17,13 +17,13 @@ export function MarginSummary({ results }: MarginSummaryProps): ReactElement {
     const avgMargin =
       withSimResult.length > 0
         ? withSimResult.reduce(
-            (sum, r) => sum + (r.simResult?.margen ?? 0),
+            (sum, r) => sum + (r.simResult?.marginPercent ?? 0),
             0,
           ) / withSimResult.length
         : 0;
 
     const totalMargin = withSimResult.reduce(
-      (sum, r) => sum + (r.simResult?.gananciaReal ?? 0),
+      (sum, r) => sum + (r.simResult?.realProfit ?? 0),
       0,
     );
 
