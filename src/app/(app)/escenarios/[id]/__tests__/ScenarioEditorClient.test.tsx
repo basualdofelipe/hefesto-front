@@ -140,8 +140,8 @@ describe('ScenarioEditorClient', () => {
                 {
                   product: { id: PRODUCT_UUID, skuCode: 'T.N.F.C.S' },
                   overridePrice: '150',
-                  simResult: { margen: 30, gananciaReal: 45 },
-                  realResult: { margen: 20, gananciaReal: 30 },
+                  simResult: { marginPercent: 30, realProfit: 45 },
+                  realResult: { marginPercent: 20, realProfit: 30 },
                 },
               ],
             },

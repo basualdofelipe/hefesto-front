@@ -151,7 +151,7 @@ src/
   auth.ts               # Auth.js configuration (providers + JWT/session callbacks)
   middleware.ts         # Route guard — auth + permission enforcement
   components/
-    calculadora/        # Calculator UI components
+    calculator/         # Calculator UI components
     catalogs/           # Catalog tab content
     expenses/           # Expense table + dialogs
     layout/             # AppSidebar, Header

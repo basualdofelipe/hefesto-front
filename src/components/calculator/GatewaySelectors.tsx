@@ -20,7 +20,8 @@ export interface GatewayConfig {
   paymentMethod: string;
   withdrawalDays: number;
   installments: number;
-  planSlug: string | undefined;
+  /** Always the effective plan: the backend never has to guess the default. */
+  planSlug: string;
 }
 
 interface GatewaySelectorsProps {
@@ -117,7 +118,10 @@ export function GatewaySelectors({
         paymentMethod: effectiveMethod,
         withdrawalDays: effectiveDays,
         installments,
-        planSlug: showPlanOverride ? planSlug : undefined,
+        // Send the effective plan explicitly (WR-01): the plan the UI shows and
+        // the plan the backend computes must be the same value, not two
+        // constants that happen to agree.
+        planSlug: showPlanOverride ? planSlug : DEFAULT_PLAN_SLUG,
       });
     }
   }, [

@@ -77,7 +77,7 @@ function formatResultMargin(
   if (!result) return '\u2014';
   const calc = result[field];
   if (!calc) return '\u2014';
-  return `$${calc.gananciaReal.toLocaleString('es-AR')} (${calc.margen.toFixed(1)}%)`;
+  return `$${calc.realProfit.toLocaleString('es-AR')} (${calc.marginPercent.toFixed(1)}%)`;
 }
 
 export function ProductOverrideTable({
@@ -126,9 +126,9 @@ export function ProductOverrideTable({
           {sortedProducts.map((product) => {
             const hasOverride = overrides[product.id] !== undefined;
             const result = resultsMap.get(product.id);
-            const simGanancia = result?.simResult?.gananciaReal ?? 0;
-            const realGanancia = result?.realResult?.gananciaReal ?? 0;
-            const diff = result?.simResult ? simGanancia - realGanancia : null;
+            const simProfit = result?.simResult?.realProfit ?? 0;
+            const realProfit = result?.realResult?.realProfit ?? 0;
+            const diff = result?.simResult ? simProfit - realProfit : null;
 
             return (
               <TableRow
