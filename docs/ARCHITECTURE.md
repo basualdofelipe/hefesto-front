@@ -266,7 +266,7 @@ src/components/
 ├── ui/                     ← Shadcn/ui primitives (button, dialog, table, sidebar…)
 │                              Never modified directly — regenerate via shadcn CLI
 │
-├── calculadora/            ← Calculator feature sub-components
+├── calculator/             ← Calculator feature sub-components
 │   ├── ModeToggle.tsx      ← forward / inverse mode switch
 │   ├── ProductSelector.tsx ← product combobox
 │   ├── GatewaySelectors.tsx← gateway + plan + installments selection
@@ -352,7 +352,7 @@ Each feature module owns its data shapes. This avoids a monolithic types file an
 | `supplies/types.ts` | `Supply`, `PriceRecord`, `formatPrice()` |
 | `expenses/types.ts` | `Expense`, `ExpenseCategory`, `groupByMonth()`, `formatAmount()` |
 | `scenarios/types.ts` | `Scenario`, `ScenarioProductResult`, `ScenarioCalcResult`, `CreateScenarioPayload` |
-| `calculadora/types.ts` | `CalcResult`, `CalcInverseResult`, `CalcBatchItem` |
+| `calculator/types.ts` | `CalcResult`, `CalcInverseResult`, `CalcBatchItem` |
 | `tiendanube-config/types.ts` | `TiendanubeConfigAll`, `TnPlan`, `TnGatewayRate`, `TnTaxConfig` |
 
 ---

@@ -44,15 +44,15 @@ export interface ScenarioProductResult {
 
 // Subset of CalcResult fields needed for scenario display
 export interface ScenarioCalcResult {
-  gananciaReal: number;
-  margen: number;
-  comisionPasarela: number;
-  costoFinanciacion: number;
-  retencionIIBB: number;
+  realProfit: number;
+  marginPercent: number;
+  gatewayFee: number;
+  financingCost: number;
+  iibbWithholding: number;
   cpt: number;
-  ivaNeto: number;
-  netoRecibido: number;
-  costoProductoConIVA: number;
+  ivaNet: number;
+  netReceived: number;
+  productCostWithIva: number;
 }
 
 export interface ScenarioCalcResponse {

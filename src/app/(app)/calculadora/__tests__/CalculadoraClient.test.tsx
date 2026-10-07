@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockUseSession = jest.fn(() => ({
@@ -25,7 +31,7 @@ jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
-jest.mock('@/components/calculadora/GatewaySelectors', () => ({
+jest.mock('@/components/calculator/GatewaySelectors', () => ({
   GatewaySelectors: ({
     onConfigChange,
   }: {
@@ -36,7 +42,7 @@ jest.mock('@/components/calculadora/GatewaySelectors', () => ({
         onConfigChange({
           gatewaySlug: 'pago_nube',
           paymentMethod: 'tarjeta_debito_credito',
-          withdrawalDays: 1,
+          withdrawalDays: 7,
           installments: 1,
           planSlug: 'esencial',
         })
@@ -48,55 +54,69 @@ jest.mock('@/components/calculadora/GatewaySelectors', () => ({
 }));
 
 const PRODUCT_UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const PRODUCT_NO_COST_UUID = 'd4e5f6a7-b8c9-4012-8def-234567890123';
 
-jest.mock('@/components/calculadora/ProductSelector', () => ({
+const productFixture = {
+  id: PRODUCT_UUID,
+  skuCode: 'T.N.F.C.S',
+  currentPrice: 100,
+  isActive: true,
+  cost: 60,
+};
+
+jest.mock('@/components/calculator/ProductSelector', () => ({
   ProductSelector: ({
     onProductSelect,
   }: {
     onProductSelect: (p: unknown) => void;
   }) => (
-    <button
-      onClick={() =>
-        onProductSelect({
-          id: PRODUCT_UUID,
-          skuCode: 'T.N.F.C.S',
-          currentPrice: '100',
-          isActive: true,
-        })
-      }
-    >
-      Select Product
-    </button>
+    <>
+      <button onClick={() => onProductSelect(productFixture)}>
+        Select Product
+      </button>
+      <button
+        onClick={() =>
+          onProductSelect({
+            ...productFixture,
+            id: PRODUCT_NO_COST_UUID,
+            cost: null,
+          })
+        }
+      >
+        Select Product Without Cost
+      </button>
+    </>
   ),
 }));
 
-jest.mock('@/components/calculadora/ModeToggle', () => ({
+jest.mock('@/components/calculator/ModeToggle', () => ({
   ModeToggle: ({ onModeChange }: { onModeChange: (m: string) => void }) => (
-    <button onClick={() => onModeChange('inverse')}>Toggle Mode</button>
+    <>
+      <button onClick={() => onModeChange('inverse')}>Toggle Mode</button>
+      <button onClick={() => onModeChange('forward')}>Toggle Forward</button>
+    </>
   ),
 }));
 
-jest.mock('@/components/calculadora/DesglosePanel', () => ({
+jest.mock('@/components/calculator/DesglosePanel', () => ({
   DesglosePanel: () => <div data-testid='desglose'>Desglose Panel</div>,
 }));
 
+import { toast } from 'sonner';
 import { CalculadoraClient } from '../CalculadoraClient';
 
 const GATEWAY_UUID = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
 const PLAN_UUID = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
+const SHIPPING_UUID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 const mockProducts = [
   {
-    id: PRODUCT_UUID,
-    skuCode: 'T.N.F.C.S',
-    currentPrice: '100',
-    isActive: true,
+    ...productFixture,
     name: { name: 'Test' },
     type: { name: 'Tipo' },
     finish: { name: 'Lisa' },
     color: { name: 'Marrón' },
     size: { name: 'S' },
-    cost: 60,
   },
 ];
 
@@ -108,7 +128,34 @@ const mockConfig = {
   installments: [],
   taxConfig: null,
   plans: [{ id: PLAN_UUID, slug: 'esencial', label: 'Esencial' }],
+  shipping: {
+    id: SHIPPING_UUID,
+    defaultShippingCost: 7315,
+    defaultShippingCharged: 7315,
+    isActive: true,
+    createdAt: '2026-09-18T00:00:00Z',
+  },
 };
+
+const HINT_NO_COST = 'Definí el costo del producto primero';
+
+function renderClient(config: unknown = mockConfig): void {
+  render(
+    <CalculadoraClient
+      products={mockProducts as never}
+      config={config as never}
+    />,
+  );
+}
+
+function fetchCalls(): Array<{ url: string; body: Record<string, unknown> }> {
+  return (global.fetch as jest.Mock).mock.calls.map(
+    ([url, init]: [string, RequestInit]) => ({
+      url,
+      body: JSON.parse(init.body as string) as Record<string, unknown>,
+    }),
+  );
+}
 
 describe('CalculadoraClient', () => {
   beforeEach(() => {
@@ -120,7 +167,12 @@ describe('CalculadoraClient', () => {
         headers: new Headers({ 'content-length': '100' }),
         json: () =>
           Promise.resolve({
-            data: { ganancia: 30, margen: 0.3, precioVenta: 130, costo: 60 },
+            data: {
+              realProfit: 30,
+              marginPercent: 0.3,
+              requiredSellingPrice: 130,
+              shippingCost: 7315,
+            },
           }),
       }),
     ) as jest.Mock;
@@ -142,34 +194,56 @@ describe('CalculadoraClient', () => {
     jest.useRealTimers();
   });
 
-  it('forward mode: calls /api/calculadora/forward and renders DesglosePanel after selecting product + gateway + price', async () => {
+  describe('shipping preload (R2)', () => {
+    it('pre-fills both shipping inputs from config.shipping', () => {
+      renderClient();
+
+      expect(screen.getByLabelText('Envío cobrado al cliente')).toHaveValue(
+        7315,
+      );
+      expect(
+        screen.getByLabelText('Costo real del envío (con IVA)'),
+      ).toHaveValue(7315);
+    });
+
+    it('shows 0 in both shipping inputs when config.shipping is null', () => {
+      renderClient({ ...mockConfig, shipping: null });
+
+      expect(screen.getByLabelText('Envío cobrado al cliente')).toHaveValue(0);
+      expect(
+        screen.getByLabelText('Costo real del envío (con IVA)'),
+      ).toHaveValue(0);
+    });
+  });
+
+  it('forward mode: POSTs /api/calculator/forward with the English body and renders DesglosePanel', async () => {
     const user = userEvent.setup({ delay: null });
-    render(
-      <CalculadoraClient
-        products={mockProducts as never}
-        config={mockConfig as never}
-      />,
-    );
+    renderClient();
 
-    // Select product
     await user.click(screen.getByText('Select Product'));
-    // Set gateway config
     await user.click(screen.getByText('Set Gateway'));
+    await user.type(screen.getByLabelText('Precio de venta'), '130');
 
-    // In forward mode, there are two inputs with placeholder '0':
-    // "Precio de venta" and "Costo de envio". Get all and use the first.
-    const allInputs = screen.getAllByPlaceholderText('0');
-    const priceInput = allInputs[0]; // Precio de venta is first
-    await user.type(priceInput, '130');
-
-    // Advance timers to trigger debounce
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/calculadora/forward'),
-        expect.objectContaining({ method: 'POST' }),
-      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    const [call] = fetchCalls();
+    expect(call.url).toMatch(/\/api\/calculator\/forward$/);
+    expect(call.body).toEqual({
+      productId: PRODUCT_UUID,
+      sellingPrice: 130,
+      shippingCharged: 7315,
+      shippingCost: 7315,
+      gatewaySlug: 'pago_nube',
+      paymentMethod: 'tarjeta_debito_credito',
+      withdrawalDays: 7,
+      installments: 1,
+      planSlug: 'esencial',
     });
 
     await waitFor(() => {
@@ -177,62 +251,150 @@ describe('CalculadoraClient', () => {
     });
   });
 
-  it('inverse mode: calls /api/calculadora/inverse after toggling mode + entering ganancia', async () => {
+  it('shipping override is per calculation: next body carries the edited cost and the config is never written', async () => {
     const user = userEvent.setup({ delay: null });
-    render(
-      <CalculadoraClient
-        products={mockProducts as never}
-        config={mockConfig as never}
-      />,
-    );
+    renderClient();
 
-    // Select product
     await user.click(screen.getByText('Select Product'));
-    // Set gateway config
     await user.click(screen.getByText('Set Gateway'));
-    // Toggle to inverse mode
-    await user.click(screen.getByText('Toggle Mode'));
+    await user.type(screen.getByLabelText('Precio de venta'), '130');
+    await act(async () => {
+      jest.runAllTimers();
+    });
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
 
-    // In inverse mode there are two inputs: "Ganancia deseada" and "Costo de envio"
-    const allInputs = screen.getAllByPlaceholderText('0');
-    const gainInput = allInputs[0]; // Ganancia deseada is first
-    await user.type(gainInput, '50');
-
-    // Advance timers to trigger debounce
-    jest.runAllTimers();
+    fireEvent.change(screen.getByLabelText('Costo real del envío (con IVA)'), {
+      target: { value: '5000' },
+    });
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/calculadora/inverse'),
-        expect.objectContaining({ method: 'POST' }),
-      );
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
+
+    const calls = fetchCalls();
+    expect(calls[1].url).toMatch(/\/api\/calculator\/forward$/);
+    expect(calls[1].body).toMatchObject({
+      shippingCharged: 7315,
+      shippingCost: 5000,
+    });
+    // Prohibition 3: the override never becomes the default
+    expect(calls.some((c) => c.url.includes('/api/tiendanube-config'))).toBe(
+      false,
+    );
+  });
+
+  describe('inverse mode (R7)', () => {
+    it('a target profit of 0 (break-even) POSTs /api/calculator/inverse with targetProfit 0', async () => {
+      const user = userEvent.setup({ delay: null });
+      renderClient();
+
+      await user.click(screen.getByText('Select Product'));
+      await user.click(screen.getByText('Set Gateway'));
+      await user.click(screen.getByText('Toggle Mode'));
+      await user.type(screen.getByLabelText('Ganancia deseada'), '0');
+
+      await act(async () => {
+        jest.runAllTimers();
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+
+      const [call] = fetchCalls();
+      expect(call.url).toMatch(/\/api\/calculator\/inverse$/);
+      expect(call.body).toMatchObject({
+        productId: PRODUCT_UUID,
+        targetProfit: 0,
+        shippingCharged: 7315,
+        shippingCost: 7315,
+      });
+      expect(call.body).not.toHaveProperty('sellingPrice');
+    });
+
+    it('a negative target profit fires no request', async () => {
+      const user = userEvent.setup({ delay: null });
+      renderClient();
+
+      await user.click(screen.getByText('Select Product'));
+      await user.click(screen.getByText('Set Gateway'));
+      await user.click(screen.getByText('Toggle Mode'));
+      fireEvent.change(screen.getByLabelText('Ganancia deseada'), {
+        target: { value: '-5' },
+      });
+
+      await act(async () => {
+        jest.runAllTimers();
+      });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  it('product without cost: no request, no toast, a single hint; gating is per product', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderClient();
+
+    await user.click(screen.getByText('Select Product Without Cost'));
+    await user.click(screen.getByText('Set Gateway'));
+    await user.type(screen.getByLabelText('Precio de venta'), '130');
+    await act(async () => {
+      jest.runAllTimers();
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getAllByText(HINT_NO_COST)).toHaveLength(1);
+
+    // Inverse mode is gated the same way
+    await user.click(screen.getByText('Toggle Mode'));
+    await user.type(screen.getByLabelText('Ganancia deseada'), '50');
+    await act(async () => {
+      jest.runAllTimers();
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getAllByText(HINT_NO_COST)).toHaveLength(1);
+
+    // Selecting a product with cost afterwards calculates normally
+    await user.click(screen.getByText('Toggle Forward'));
+    await user.click(screen.getByText('Select Product'));
+    await act(async () => {
+      jest.runAllTimers();
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+    const [call] = fetchCalls();
+    expect(call.url).toMatch(/\/api\/calculator\/forward$/);
+    expect(call.body).toMatchObject({
+      productId: PRODUCT_UUID,
+      sellingPrice: 130,
+    });
+    expect(screen.queryByText(HINT_NO_COST)).not.toBeInTheDocument();
   });
 
   it('debounce: rapid input changes trigger only one fetch', async () => {
     const user = userEvent.setup({ delay: null });
-    render(
-      <CalculadoraClient
-        products={mockProducts as never}
-        config={mockConfig as never}
-      />,
-    );
+    renderClient();
 
-    // Select product and gateway first
     await user.click(screen.getByText('Select Product'));
     await user.click(screen.getByText('Set Gateway'));
 
-    // Clear any previous fetch calls
     (global.fetch as jest.Mock).mockClear();
 
-    // Type rapidly — multiple chars trigger multiple useEffect calls
-    const allInputs = screen.getAllByPlaceholderText('0');
-    const priceInput = allInputs[0]; // Precio de venta is first
-    await user.type(priceInput, '999');
+    await user.type(screen.getByLabelText('Precio de venta'), '999');
 
-    // Before runAllTimers, fetch should not have been called yet (debounce pending)
-    // Advance all timers to flush debounce
-    jest.runAllTimers();
+    await act(async () => {
+      jest.runAllTimers();
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
