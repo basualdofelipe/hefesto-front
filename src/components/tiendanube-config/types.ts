@@ -11,6 +11,8 @@ export interface TnGatewayRate {
   paymentMethod: string;
   withdrawalDays: number;
   ratePercent: number;
+  // null = shared row that applies to every plan (Phase 14, D-06)
+  planId: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -31,6 +33,14 @@ export interface TnTaxConfig {
   createdAt: string;
 }
 
+export interface TnShippingConfig {
+  id: string;
+  defaultShippingCost: number;
+  defaultShippingCharged: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface TnPlan {
   id: string;
   slug: string;
@@ -47,6 +57,7 @@ export interface TiendanubeConfigAll {
   installments: TnInstallmentRate[];
   taxConfig: TnTaxConfig;
   plans: TnPlan[];
+  shipping: TnShippingConfig | null;
 }
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

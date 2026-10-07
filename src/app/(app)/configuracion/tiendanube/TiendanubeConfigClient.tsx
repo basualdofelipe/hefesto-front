@@ -21,6 +21,7 @@ import { GatewaySection } from '@/components/tiendanube-config/GatewaySection';
 import { PlansSection } from '@/components/tiendanube-config/PlansSection';
 import { InstallmentsSection } from '@/components/tiendanube-config/InstallmentsSection';
 import { TaxConfigSection } from '@/components/tiendanube-config/TaxConfigSection';
+import { ShippingSection } from '@/components/tiendanube-config/ShippingSection';
 import type {
   TiendanubeConfigAll,
   TnGatewayRate,
@@ -57,7 +58,7 @@ export function TiendanubeConfigClient({
 
   const sectionKeys = useMemo(() => {
     const keys = config.gateways.map((gw) => `gateway-${gw.id}`);
-    keys.push('plans', 'installments', 'taxes');
+    keys.push('plans', 'installments', 'taxes', 'shipping');
     return keys;
   }, [config.gateways]);
 
@@ -94,6 +95,11 @@ export function TiendanubeConfigClient({
           </SelectContent>
         </Select>
       </div>
+
+      <p className='text-muted-foreground text-xs'>
+        Ingresá la tasa efectiva; si Tiendanube la publica &apos;+ IVA&apos;,
+        cargala con el IVA sumado.
+      </p>
 
       <Accordion type='multiple' defaultValue={sectionKeys}>
         {config.gateways.map((gateway) => (
@@ -132,6 +138,13 @@ export function TiendanubeConfigClient({
           <AccordionTrigger>Impuestos</AccordionTrigger>
           <AccordionContent>
             <TaxConfigSection taxConfig={config.taxConfig} />
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value='shipping'>
+          <AccordionTrigger>Envío por defecto</AccordionTrigger>
+          <AccordionContent>
+            <ShippingSection shipping={config.shipping} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>
