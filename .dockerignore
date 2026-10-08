@@ -1,0 +1,14 @@
+node_modules
+.next
+.swc
+coverage
+.git
+.github
+.husky
+.env*
+*.tsbuildinfo
+next-env.d.ts
+docs
+README.md
+Dockerfile
+.dockerignore
