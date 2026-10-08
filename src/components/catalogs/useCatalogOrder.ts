@@ -30,7 +30,10 @@ export interface UseCatalogOrderResult {
   pause: () => void;
   /** A drag ended without a move: restarts the wait if an order is unsaved. */
   resume: () => void;
-  /** A row the server just created: goes last, and into the confirmed baseline. */
+  /**
+   * A row the server just created: goes last, and into the confirmed baseline.
+   * A row already listed (a resync got there first) is replaced in place.
+   */
   applyCreated: (item: CatalogItem) => void;
   /** A row the server just renamed: keeps its position. */
   applyUpdated: (item: CatalogItem) => void;
@@ -202,10 +205,23 @@ export function useCatalogOrder(
     if (isUnsaved()) schedule();
   }, [isUnsaved, schedule]);
 
+  // Idempotent: a resync GET may already have listed the row before the
+  // create's reply lands. A second copy would duplicate the React key and the
+  // id in every later PUT (a 400, a resync, and the same race again).
   const applyCreated = useCallback(
     (item: CatalogItem): void => {
-      commit([...itemsRef.current, item]);
-      confirmedIdsRef.current = [...confirmedIdsRef.current, item.id];
+      const current = itemsRef.current;
+      const known = current.some((existing) => existing.id === item.id);
+      commit(
+        known
+          ? current.map((existing) =>
+              existing.id === item.id ? item : existing,
+            )
+          : [...current, item],
+      );
+      if (!confirmedIdsRef.current.includes(item.id)) {
+        confirmedIdsRef.current = [...confirmedIdsRef.current, item.id];
+      }
     },
     [commit],
   );

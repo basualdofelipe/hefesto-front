@@ -444,6 +444,42 @@ describe('useCatalogOrder', () => {
     expect(ids(result.current.items)).toEqual([A.id, B.id, C.id, D.id, N.id]);
   });
 
+  it('keeps one copy of a created item applied twice, in the list and in the next PUT', async () => {
+    const { result } = renderOrderHook();
+
+    act(() => result.current.applyCreated(N));
+    act(() => result.current.applyCreated(N));
+    expect(ids(result.current.items)).toEqual([...ids(INITIAL), N.id]);
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.ids).toEqual([B.id, C.id, A.id, D.id, N.id]);
+  });
+
+  it('replaces in place a created item the resync already brought in', async () => {
+    // The create's reply lands after a resync whose GET already listed N.
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    respondList = () => Promise.resolve({ data: [N, ...INITIAL] });
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+    expect(ids(result.current.items)).toEqual([N.id, ...ids(INITIAL)]);
+
+    const renamed: CatalogItem = { ...N, name: 'XXL' };
+    act(() => result.current.applyCreated(renamed));
+    expect(result.current.items).toEqual([renamed, ...INITIAL]);
+
+    // The baseline holds N once, so moving away and back sends nothing.
+    respond = () => Promise.resolve(undefined);
+    act(() => result.current.move(A.id, B.id));
+    act(() => result.current.move(A.id, B.id));
+    await advance(5000);
+    expect(requests).toHaveLength(1);
+  });
+
   it('sends nothing for a create alone', async () => {
     const { result } = renderOrderHook();
 
