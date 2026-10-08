@@ -48,8 +48,16 @@ export default async function CatalogosPage(): Promise<ReactElement> {
             </TabsTrigger>
           ))}
         </TabsList>
+        {/* Force-mounting keeps each tab's edits and pending reorder across tab
+            switches (D-08). Radix then never sets `hidden`, so the class
+            hides the inactive panels. */}
         {DIMENSIONS.map((d, i) => (
-          <TabsContent key={d.key} value={d.key}>
+          <TabsContent
+            key={d.key}
+            value={d.key}
+            forceMount
+            className='data-[state=inactive]:hidden'
+          >
             <CatalogTabContent
               dimension={d.key}
               initialItems={results[i].data}

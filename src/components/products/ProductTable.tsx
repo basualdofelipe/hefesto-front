@@ -59,25 +59,20 @@ export function ProductTable({
     });
   }, [initialProducts, searchQuery, showInactive]);
 
-  const groupedProducts = useMemo((): Record<string, Product[]> => {
-    const groups: Record<string, Product[]> = {};
+  // Group by type in arrival order: the API already returns products in
+  // catalog order (D-11), so the front never re-orders catalog values.
+  const typeGroups = useMemo((): Product[][] => {
+    const groups = new Map<string, Product[]>();
     for (const product of filteredProducts) {
-      const typeId = product.type.id;
-      if (!groups[typeId]) {
-        groups[typeId] = [];
+      const group = groups.get(product.type.id);
+      if (group) {
+        group.push(product);
+      } else {
+        groups.set(product.type.id, [product]);
       }
-      groups[typeId].push(product);
     }
-    return groups;
+    return Array.from(groups.values());
   }, [filteredProducts]);
-
-  const sortedTypeIds = useMemo((): string[] => {
-    return Object.keys(groupedProducts).sort((a, b) => {
-      const nameA = groupedProducts[a][0].type.name;
-      const nameB = groupedProducts[b][0].type.name;
-      return nameA.localeCompare(nameB);
-    });
-  }, [groupedProducts]);
 
   return (
     <div className='space-y-4'>
@@ -111,7 +106,7 @@ export function ProductTable({
         )}
       </div>
 
-      {sortedTypeIds.length === 0 ? (
+      {typeGroups.length === 0 ? (
         <div className='text-muted-foreground rounded-md border py-12 text-center'>
           {searchQuery
             ? 'No se encontraron productos con los filtros seleccionados.'
@@ -119,11 +114,11 @@ export function ProductTable({
         </div>
       ) : (
         <div className='space-y-4'>
-          {sortedTypeIds.map((typeId) => (
+          {typeGroups.map((groupProducts) => (
             <ProductTypeGroup
-              key={typeId}
-              typeName={groupedProducts[typeId][0].type.name}
-              products={groupedProducts[typeId]}
+              key={groupProducts[0].type.id}
+              typeName={groupProducts[0].type.name}
+              products={groupProducts}
               supplies={supplies}
               types={types}
               names={names}

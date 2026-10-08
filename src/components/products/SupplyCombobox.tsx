@@ -30,15 +30,18 @@ export function SupplyCombobox({
 }): ReactElement {
   const [open, setOpen] = useState(false);
 
-  const grouped = supplies.reduce<Record<string, SupplyOption[]>>(
-    (acc, supply) => {
-      const typeName = supply.type.name;
-      if (!acc[typeName]) acc[typeName] = [];
-      acc[typeName].push(supply);
-      return acc;
-    },
-    {},
-  );
+  // Groups keep the catalog order the API sends (D-11). Keyed by type name
+  // (SupplyOption carries no type id; catalog names are unique). A Map keeps
+  // insertion order for every key, unlike a plain object.
+  const grouped = new Map<string, SupplyOption[]>();
+  for (const supply of supplies) {
+    const typeSupplies = grouped.get(supply.type.name);
+    if (typeSupplies) {
+      typeSupplies.push(supply);
+    } else {
+      grouped.set(supply.type.name, [supply]);
+    }
+  }
 
   const selected = supplies.find((s) => s.id === value);
 
@@ -63,7 +66,7 @@ export function SupplyCombobox({
           <CommandInput placeholder='Buscar insumo...' />
           <CommandList>
             <CommandEmpty>No se encontraron insumos.</CommandEmpty>
-            {Object.entries(grouped).map(([typeName, typeSupplies]) => (
+            {Array.from(grouped.entries()).map(([typeName, typeSupplies]) => (
               <CommandGroup key={typeName} heading={typeName}>
                 {typeSupplies.map((supply) => (
                   <CommandItem

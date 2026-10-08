@@ -31,6 +31,7 @@ export function ProductSelector({
   selectedProductId,
   onProductSelect,
 }: ProductSelectorProps): ReactElement {
+  // Groups and their options keep the catalog order the API sends (D-11).
   const grouped = useMemo((): GroupedProducts[] => {
     const map = new Map<string, Product[]>();
     for (const product of products) {
@@ -40,11 +41,9 @@ export function ProductSelector({
       existing.push(product);
       map.set(key, existing);
     }
-    return Array.from(map.entries()).map(([typeName, prods]) => ({
+    return Array.from(map.entries()).map(([typeName, typeProducts]) => ({
       typeName,
-      products: prods.sort((a, b) =>
-        getProductDisplayName(a).localeCompare(getProductDisplayName(b)),
-      ),
+      products: typeProducts,
     }));
   }, [products]);
 

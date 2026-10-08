@@ -462,7 +462,10 @@ export function RolesClient({ initialRoles }: RolesClientProps): ReactElement {
                           onCheckedChange={(value) =>
                             handlePermissionToggle(key, value)
                           }
-                          disabled={isSubmitting}
+                          disabled={
+                            isSubmitting ||
+                            editingRole?.permissionsLocked === true
+                          }
                         />
                       </div>
                     ))}

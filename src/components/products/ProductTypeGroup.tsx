@@ -51,26 +51,27 @@ export function ProductTypeGroup({
     return total / withCost.length;
   }, [products]);
 
-  // Sub-group by name, sorted alphabetically
+  // Sub-group by name, keeping the catalog order the API returned (D-11)
   const nameGroups = useMemo((): {
+    nameId: string;
     productName: string;
     products: Product[];
   }[] => {
-    const groups: Record<string, Product[]> = {};
+    const groups = new Map<string, Product[]>();
     for (const product of products) {
-      const nameId = product.name.id;
-      if (!groups[nameId]) {
-        groups[nameId] = [];
+      const group = groups.get(product.name.id);
+      if (group) {
+        group.push(product);
+      } else {
+        groups.set(product.name.id, [product]);
       }
-      groups[nameId].push(product);
     }
 
-    return Object.values(groups)
-      .map((groupProducts) => ({
-        productName: groupProducts[0].name.name,
-        products: groupProducts,
-      }))
-      .sort((a, b) => a.productName.localeCompare(b.productName));
+    return Array.from(groups.entries()).map(([nameId, groupProducts]) => ({
+      nameId,
+      productName: groupProducts[0].name.name,
+      products: groupProducts,
+    }));
   }, [products]);
 
   return (
@@ -124,7 +125,7 @@ export function ProductTypeGroup({
         <div className='space-y-1'>
           {nameGroups.map((group) => (
             <ProductNameGroup
-              key={group.productName}
+              key={group.nameId}
               productName={group.productName}
               products={group.products}
               supplies={supplies}

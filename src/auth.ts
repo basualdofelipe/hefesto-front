@@ -3,6 +3,9 @@ import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
 import type { Permissions } from '@/types/permissions';
 import { NO_PERMISSIONS } from '@/types/permissions';
+import { isDemoMode } from '@/constants/demo';
+import { selectAuthProviders } from '@/lib/auth-providers';
+import { describeError, logger } from '@/lib/logger';
 
 interface BackendAuthResponse {
   data: {
@@ -17,41 +20,52 @@ interface BackendAuthResponse {
   };
 }
 
+const credentials = Credentials({
+  credentials: { email: { type: 'text' } },
+  async authorize(credentials): Promise<{
+    backendToken: string;
+    permissions: Permissions;
+    userId: string;
+    email: string;
+  } | null> {
+    if (!credentials?.email) return null;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/demo-login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: credentials.email }),
+        },
+      );
+      if (!res.ok) {
+        // Never the email, the token or the response body.
+        logger.warn(
+          { op: 'demo-login', status: res.status },
+          'demo login rejected by the backend',
+        );
+        return null;
+      }
+      const body = (await res.json()) as BackendAuthResponse;
+      return {
+        backendToken: body.data.accessToken,
+        permissions: body.data.user.permissions,
+        userId: String(body.data.user.id),
+        email: body.data.user.email,
+      };
+    } catch (error) {
+      // Backend unreachable or a reply of an unexpected shape.
+      logger.error(
+        { op: 'demo-login', err: describeError(error) },
+        'demo login failed',
+      );
+      return null;
+    }
+  },
+});
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    Google,
-    Credentials({
-      credentials: { email: { type: 'text' } },
-      async authorize(credentials): Promise<{
-        backendToken: string;
-        permissions: Permissions;
-        userId: string;
-        email: string;
-      } | null> {
-        if (!credentials?.email) return null;
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/auth/demo-login`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: credentials.email }),
-            },
-          );
-          if (!res.ok) return null;
-          const body = (await res.json()) as BackendAuthResponse;
-          return {
-            backendToken: body.data.accessToken,
-            permissions: body.data.user.permissions,
-            userId: String(body.data.user.id),
-            email: body.data.user.email,
-          };
-        } catch {
-          return null;
-        }
-      },
-    }),
-  ],
+  providers: selectAuthProviders(isDemoMode(), { google: Google, credentials }),
   session: { strategy: 'jwt' },
   pages: {
     signIn: '/login',
@@ -79,10 +93,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.backendToken = body.data.accessToken;
             token.permissions = body.data.user.permissions;
             token.userId = String(body.data.user.id);
+          } else {
+            // Never the email, the id token or the response body.
+            logger.warn(
+              { op: 'google-login', status: res.status },
+              'google login rejected by the backend',
+            );
           }
-        } catch {
-          // Backend unreachable — token won't have backendToken
-          // middleware.ts will redirect to /acceso-denegado on next navigation
+        } catch (error) {
+          // Backend unreachable or a reply of an unexpected shape. The token
+          // keeps no backendToken, so middleware.ts redirects to
+          // /acceso-denegado on the next navigation.
+          logger.error(
+            { op: 'google-login', err: describeError(error) },
+            'google login exchange failed',
+          );
         }
       }
 

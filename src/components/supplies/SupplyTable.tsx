@@ -26,6 +26,12 @@ interface SupplyTableProps {
   canEdit: boolean;
 }
 
+interface SupplyTypeGroupData {
+  typeId: string;
+  typeName: string;
+  supplies: Supply[];
+}
+
 const ALL_SUPPLIERS_VALUE = '__all__';
 
 export function SupplyTable({
@@ -63,22 +69,24 @@ export function SupplyTable({
     });
   }, [initialSupplies, searchQuery, selectedSupplierId, showInactive]);
 
-  const groupedSupplies = useMemo((): Record<string, Supply[]> => {
-    const groups: Record<string, Supply[]> = {};
+  // Groups keep the catalog order the API sends (D-11). A Map keeps insertion
+  // order for every key, unlike a plain object, which hoists integer-like keys.
+  const typeGroups = useMemo((): SupplyTypeGroupData[] => {
+    const groups = new Map<string, SupplyTypeGroupData>();
     for (const supply of filteredSupplies) {
-      const typeName = supply.type.name;
-      if (!groups[typeName]) {
-        groups[typeName] = [];
+      const group = groups.get(supply.type.id);
+      if (group) {
+        group.supplies.push(supply);
+      } else {
+        groups.set(supply.type.id, {
+          typeId: supply.type.id,
+          typeName: supply.type.name,
+          supplies: [supply],
+        });
       }
-      groups[typeName].push(supply);
     }
-    return groups;
+    return Array.from(groups.values());
   }, [filteredSupplies]);
-
-  const sortedTypeNames = useMemo(
-    (): string[] => Object.keys(groupedSupplies).sort(),
-    [groupedSupplies],
-  );
 
   return (
     <div className='space-y-4'>
@@ -133,7 +141,7 @@ export function SupplyTable({
         )}
       </div>
 
-      {sortedTypeNames.length === 0 ? (
+      {typeGroups.length === 0 ? (
         <div className='text-muted-foreground rounded-md border py-12 text-center'>
           {searchQuery || selectedSupplierId
             ? 'No se encontraron insumos con los filtros seleccionados.'
@@ -141,11 +149,11 @@ export function SupplyTable({
         </div>
       ) : (
         <div className='space-y-4'>
-          {sortedTypeNames.map((typeName) => (
+          {typeGroups.map((group) => (
             <SupplyTypeGroup
-              key={typeName}
-              typeName={typeName}
-              supplies={groupedSupplies[typeName]}
+              key={group.typeId}
+              typeName={group.typeName}
+              supplies={group.supplies}
               supplyTypes={supplyTypes}
               allSuppliers={suppliers}
               canEdit={canEdit}
