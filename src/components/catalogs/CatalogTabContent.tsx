@@ -79,8 +79,16 @@ export function CatalogTabContent({
   const { data: session } = useSession();
   const token = session?.accessToken ?? '';
 
-  const { items, isSaving, move, applyCreated, applyUpdated, applyDeleted } =
-    useCatalogOrder(dimension, initialItems, token);
+  const {
+    items,
+    isSaving,
+    move,
+    pause,
+    resume,
+    applyCreated,
+    applyUpdated,
+    applyDeleted,
+  } = useCatalogOrder(dimension, initialItems, token);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -231,9 +239,14 @@ export function CatalogTabContent({
             sensors={sensors}
             collisionDetection={closestCenter}
             accessibility={{ announcements, screenReaderInstructions }}
+            // A drag in progress holds the pending save (D-06). A drop that
+            // moves restarts the wait in move(); any other end resumes it.
+            onDragStart={pause}
             onDragEnd={({ active, over }) => {
               if (over) move(String(active.id), String(over.id));
+              resume();
             }}
+            onDragCancel={resume}
           >
             {/* Dragging is blocked only while the reorder PUT is in flight (D-06). */}
             <SortableContext

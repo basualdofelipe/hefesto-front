@@ -19,7 +19,12 @@ export interface UseCatalogOrderResult {
   items: CatalogItem[];
   /** True only while the reorder PUT is in flight; the UI blocks dragging then. */
   isSaving: boolean;
+  /** Applies a drop; ignored while the reorder PUT is in flight (D-06). */
   move: (activeId: string, overId: string) => void;
+  /** A drag started: holds the pending save so it cannot fire mid-drag. */
+  pause: () => void;
+  /** A drag ended without a move: restarts the wait if an order is unsaved. */
+  resume: () => void;
   /** A row the server just created: goes last, and into the confirmed baseline. */
   applyCreated: (item: CatalogItem) => void;
   /** A row the server just renamed: keeps its position. */
@@ -37,6 +42,10 @@ export interface UseCatalogOrderResult {
  * confirmed (D-06). A failed save reverts to that confirmed order and shows
  * an error toast; there is no success toast (D-09). Unmounting with a save
  * pending sends it right away (D-07). Items keep the received order (D-10).
+ *
+ * A drag in progress counts as reordering: `pause` holds the wait while one
+ * is active, and drops are refused while the PUT is in flight, so a save can
+ * never land under (or be reverted over) the user's latest drop.
  */
 export function useCatalogOrder(
   dimension: string,
@@ -51,6 +60,8 @@ export function useCatalogOrder(
   const itemsRef = useRef<CatalogItem[]>(initialItems);
   const confirmedIdsRef = useRef<string[]>(initialItems.map((item) => item.id));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read synchronously by move(): the isSaving state lags one render.
+  const savingRef = useRef(false);
   const tokenRef = useRef(token);
 
   useEffect(() => {
@@ -62,14 +73,28 @@ export function useCatalogOrder(
     setItems(next);
   }, []);
 
-  const flush = useCallback(async (): Promise<void> => {
+  const clearTimer = useCallback((): void => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  const isUnsaved = useCallback(
+    (): boolean =>
+      !sameOrder(
+        itemsRef.current.map((item) => item.id),
+        confirmedIdsRef.current,
+      ),
+    [],
+  );
+
+  const flush = useCallback(async (): Promise<void> => {
+    clearTimer();
     const ids = itemsRef.current.map((item) => item.id);
     if (sameOrder(ids, confirmedIdsRef.current)) return;
 
+    savingRef.current = true;
     setIsSaving(true);
     // try/catch because the outcome drives the state: success moves the
     // baseline, failure reverts the list to it.
@@ -93,38 +118,53 @@ export function useCatalogOrder(
         error instanceof Error ? error.message : 'No se pudo guardar el orden',
       );
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
-  }, [dimension, commit]);
+  }, [dimension, commit, clearTimer]);
 
   const flushRef = useRef(flush);
   useEffect(() => {
     flushRef.current = flush;
   }, [flush]);
 
-  // Empty deps: the cleanup runs on a real unmount only. StrictMode's
-  // simulated unmount happens before any move, so no timer is pending (D-07).
+  const schedule = useCallback((): void => {
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      void flushRef.current();
+    }, SAVE_DELAY_MS);
+  }, [clearTimer]);
+
+  // Stable deps: the cleanup runs on a real unmount only. StrictMode's
+  // simulated unmount happens before any move, so nothing is unsaved (D-07).
+  // An unsaved order goes out even when a drag paused its timer; one already
+  // in flight is not sent twice.
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) void flushRef.current();
+      if (!savingRef.current && isUnsaved()) void flushRef.current();
     };
-  }, []);
+  }, [isUnsaved]);
 
   const move = useCallback(
     (activeId: string, overId: string): void => {
+      if (savingRef.current) return;
       const current = itemsRef.current;
       const from = current.findIndex((item) => item.id === activeId);
       const to = current.findIndex((item) => item.id === overId);
       if (from < 0 || to < 0 || from === to) return;
 
       commit(arrayMove(current, from, to));
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        void flushRef.current();
-      }, SAVE_DELAY_MS);
+      schedule();
     },
-    [commit],
+    [commit, schedule],
   );
+
+  const pause = clearTimer;
+
+  const resume = useCallback((): void => {
+    if (savingRef.current || timerRef.current !== null) return;
+    if (isUnsaved()) schedule();
+  }, [isUnsaved, schedule]);
 
   const applyCreated = useCallback(
     (item: CatalogItem): void => {
@@ -155,5 +195,14 @@ export function useCatalogOrder(
     [commit],
   );
 
-  return { items, isSaving, move, applyCreated, applyUpdated, applyDeleted };
+  return {
+    items,
+    isSaving,
+    move,
+    pause,
+    resume,
+    applyCreated,
+    applyUpdated,
+    applyDeleted,
+  };
 }

@@ -309,6 +309,59 @@ describe('CatalogTabContent', () => {
     ]);
   });
 
+  it('holds the save while a keyboard drag spans the 2 s window', async () => {
+    jest.useFakeTimers();
+    mockRowRects();
+    renderTab([M, XS, L]);
+
+    await keyboardMoveFirstRowDown();
+    expect(rowOrder()).toEqual(['XS', 'M', 'L']);
+    await advance(1500);
+
+    // Lift M, step down, and keep it lifted past the first drop's 2 s mark.
+    const moving = handles()[1];
+    act(() => moving.focus());
+    fireEvent.keyDown(moving, { code: 'Space', key: ' ' });
+    await advance(0);
+    fireEvent.keyDown(moving, { code: 'ArrowDown', key: 'ArrowDown' });
+    await advance(1000);
+    expect(orderRequests()).toHaveLength(0);
+    fireEvent.keyDown(moving, { code: 'Space', key: ' ' });
+    await advance(0);
+
+    expect(rowOrder()).toEqual(['XS', 'L', 'M']);
+    await advance(1999);
+    expect(orderRequests()).toHaveLength(0);
+    await advance(1);
+    expect(orderRequests()).toEqual([
+      { path: ORDER_PATH, method: 'PUT', body: { ids: [XS.id, L.id, M.id] } },
+    ]);
+  });
+
+  it('restarts the 2 s wait when a drag is cancelled with Escape', async () => {
+    jest.useFakeTimers();
+    mockRowRects();
+    renderTab([M, XS, L]);
+
+    await keyboardMoveFirstRowDown();
+    await advance(1500);
+
+    const lifted = handles()[0];
+    act(() => lifted.focus());
+    fireEvent.keyDown(lifted, { code: 'Space', key: ' ' });
+    await advance(1000);
+    fireEvent.keyDown(lifted, { code: 'Escape', key: 'Escape' });
+    await advance(0);
+
+    expect(orderRequests()).toHaveLength(0);
+    await advance(1999);
+    expect(orderRequests()).toHaveLength(0);
+    await advance(1);
+    expect(orderRequests()).toEqual([
+      { path: ORDER_PATH, method: 'PUT', body: { ids: [XS.id, M.id, L.id] } },
+    ]);
+  });
+
   it('reverts to the confirmed order and shows an error toast when the save fails', async () => {
     jest.useFakeTimers();
     mockRowRects();

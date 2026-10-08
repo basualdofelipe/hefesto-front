@@ -233,6 +233,67 @@ describe('useCatalogOrder', () => {
     expect(ids(result.current.items)).toEqual([B.id, C.id, A.id, D.id]);
   });
 
+  it('refuses a move while the PUT is in flight', async () => {
+    const put = deferred();
+    respond = () => put.promise;
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+    expect(result.current.isSaving).toBe(true);
+
+    act(() => result.current.move(D.id, B.id));
+    expect(ids(result.current.items)).toEqual([B.id, C.id, A.id, D.id]);
+
+    await act(async () => {
+      put.resolve();
+      await put.promise;
+    });
+    await advance(5000);
+
+    expect(requests).toHaveLength(1);
+    expect(ids(result.current.items)).toEqual([B.id, C.id, A.id, D.id]);
+  });
+
+  it('holds the pending save while paused and restarts the full wait on resume', async () => {
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(1500);
+    act(() => result.current.pause());
+    await advance(5000);
+    expect(requests).toEqual([]);
+
+    act(() => result.current.resume());
+    await advance(SAVE_DELAY_MS - 1);
+    expect(requests).toEqual([]);
+    await advance(1);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.ids).toEqual([B.id, C.id, A.id, D.id]);
+  });
+
+  it('sends nothing on resume when the order matches the confirmed one', async () => {
+    const { result } = renderOrderHook();
+
+    act(() => result.current.pause());
+    act(() => result.current.resume());
+    await advance(5000);
+
+    expect(requests).toEqual([]);
+  });
+
+  it('sends the pending order at once when it unmounts while paused', async () => {
+    const { result, unmount } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    act(() => result.current.pause());
+    unmount();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.ids).toEqual([B.id, C.id, A.id, D.id]);
+  });
+
   it('does not save again after a successful PUT when nothing moved', async () => {
     const { result } = renderOrderHook();
 
