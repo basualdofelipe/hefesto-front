@@ -99,26 +99,27 @@ export function ProductNameGroup({
 
   const showDivergenceBadge = hasDivergence || costBasedDivergence;
 
-  // Sub-group by finish, sorted alphabetically
+  // Sub-group by finish, keeping the catalog order the API returned (D-11)
   const finishGroups = useMemo((): {
+    finishId: string;
     finishName: string;
     products: Product[];
   }[] => {
-    const groups: Record<string, Product[]> = {};
+    const groups = new Map<string, Product[]>();
     for (const product of products) {
-      const finishId = product.finish.id;
-      if (!groups[finishId]) {
-        groups[finishId] = [];
+      const group = groups.get(product.finish.id);
+      if (group) {
+        group.push(product);
+      } else {
+        groups.set(product.finish.id, [product]);
       }
-      groups[finishId].push(product);
     }
 
-    return Object.values(groups)
-      .map((groupProducts) => ({
-        finishName: groupProducts[0].finish.name,
-        products: groupProducts,
-      }))
-      .sort((a, b) => a.finishName.localeCompare(b.finishName));
+    return Array.from(groups.entries()).map(([finishId, groupProducts]) => ({
+      finishId,
+      finishName: groupProducts[0].finish.name,
+      products: groupProducts,
+    }));
   }, [products]);
 
   function handleDivergenceDetected(hasDivergent: boolean): void {
@@ -205,7 +206,7 @@ export function ProductNameGroup({
         <div className='space-y-1'>
           {finishGroups.map((group) => (
             <ProductFinishGroup
-              key={group.finishName}
+              key={group.finishId}
               finishName={group.finishName}
               products={group.products}
               supplies={supplies}
