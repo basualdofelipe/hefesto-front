@@ -14,6 +14,10 @@ export interface CatalogItem {
   name: string;
 }
 
+interface CatalogListResponse {
+  data: CatalogItem[];
+}
+
 export interface UseCatalogOrderResult {
   /** Current list, in display order (optimistic while a save is pending). */
   items: CatalogItem[];
@@ -39,8 +43,9 @@ export interface UseCatalogOrderResult {
  * Moves update the list at once; one `PUT /api/catalogs/:dimension/order`
  * goes out after `SAVE_DELAY_MS` without further moves, carrying the final
  * full id list, and only when it differs from the last order the server
- * confirmed (D-06). A failed save reverts to that confirmed order and shows
- * an error toast; there is no success toast (D-09). Unmounting with a save
+ * confirmed (D-06). A failed save shows an error toast and rebases the list
+ * and the confirmed order on the server's current list, falling back to the
+ * confirmed order if that read fails too; there is no success toast (D-09). Unmounting with a save
  * pending sends it right away (D-07). Items keep the received order (D-10).
  *
  * A drag in progress counts as reordering: `pause` holds the wait while one
@@ -89,6 +94,26 @@ export function useCatalogOrder(
     [],
   );
 
+  /**
+   * After a failed save: a stale set (another session created or deleted a
+   * row since this page loaded) is rejected on every later save until the
+   * baseline matches the server again, so take the server's list as both the
+   * list and the confirmed order. If that read fails too, revert to the last
+   * confirmed order; the save's error toast has already told the user.
+   */
+  const rebaseOnServer = useCallback(async (): Promise<void> => {
+    try {
+      const response = await apiClientFetch<CatalogListResponse>(
+        `/api/catalogs/${dimension}`,
+        tokenRef.current,
+      );
+      confirmedIdsRef.current = response.data.map((item) => item.id);
+      commit(response.data);
+    } catch {
+      commit(orderByIds(itemsRef.current, confirmedIdsRef.current));
+    }
+  }, [dimension, commit]);
+
   const flush = useCallback(async (): Promise<void> => {
     clearTimer();
     const ids = itemsRef.current.map((item) => item.id);
@@ -97,7 +122,7 @@ export function useCatalogOrder(
     savingRef.current = true;
     setIsSaving(true);
     // try/catch because the outcome drives the state: success moves the
-    // baseline, failure reverts the list to it.
+    // baseline, failure rebases the list (dragging stays blocked meanwhile).
     try {
       await apiClientFetch(
         `/api/catalogs/${dimension}/order`,
@@ -113,15 +138,15 @@ export function useCatalogOrder(
         (item) => item.id,
       );
     } catch (error) {
-      commit(orderByIds(itemsRef.current, confirmedIdsRef.current));
       toast.error(
         error instanceof Error ? error.message : 'No se pudo guardar el orden',
       );
+      await rebaseOnServer();
     } finally {
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [dimension, commit, clearTimer]);
+  }, [dimension, clearTimer, rebaseOnServer]);
 
   const flushRef = useRef(flush);
   useEffect(() => {

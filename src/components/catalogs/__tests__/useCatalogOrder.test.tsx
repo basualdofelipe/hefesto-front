@@ -26,7 +26,10 @@ interface RecordedRequest {
 }
 
 const DIMENSION = 'product-sizes';
-const ORDER_PATH = `/api/catalogs/${DIMENSION}/order`;
+const LIST_PATH = `/api/catalogs/${DIMENSION}`;
+const ORDER_PATH = `${LIST_PATH}/order`;
+const STALE_SET_MESSAGE =
+  'El orden enviado no coincide con los ítems actuales del catálogo';
 
 const A: CatalogItem = {
   id: 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1',
@@ -53,6 +56,10 @@ const INITIAL: CatalogItem[] = [A, B, C, D];
 
 let requests: RecordedRequest[];
 let respond: () => Promise<unknown>;
+// GET /api/catalogs/:dimension, the resync after a failed save. Rejects by
+// default, so a failed save falls back to the confirmed order.
+let listRequests: string[];
+let respondList: () => Promise<unknown>;
 
 function ids(items: readonly CatalogItem[]): string[] {
   return items.map((item) => item.id);
@@ -86,6 +93,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   requests = [];
   respond = () => Promise.resolve(undefined);
+  listRequests = [];
+  respondList = () => Promise.reject(new Error('offline'));
   mockApiClientFetch.mockReset();
   mockApiClientFetch.mockImplementation(
     <T,>(
@@ -93,6 +102,10 @@ beforeEach(() => {
       token: string,
       options: RequestInit = {},
     ): Promise<T> => {
+      if (options.method === undefined) {
+        listRequests.push(path);
+        return respondList() as Promise<T>;
+      }
       requests.push({
         path,
         token,
@@ -194,6 +207,58 @@ describe('useCatalogOrder', () => {
     await advance(SAVE_DELAY_MS);
 
     expect(requests).toHaveLength(1);
+    expect(ids(result.current.items)).toEqual(ids(INITIAL));
+    expect(result.current.isSaving).toBe(false);
+  });
+
+  it('rebases on the server list after a stale-set 400, so the next move saves', async () => {
+    // Another session created N after this page loaded.
+    const serverItems = [...INITIAL, N];
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    respondList = () => Promise.resolve({ data: serverItems });
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(listRequests).toEqual([LIST_PATH]);
+    expect(ids(result.current.items)).toEqual(ids(serverItems));
+    expect(result.current.isSaving).toBe(false);
+
+    respond = () => Promise.resolve(undefined);
+    act(() => result.current.move(N.id, A.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1].body.ids).toEqual([N.id, A.id, B.id, C.id, D.id]);
+    expect([...requests[1].body.ids].sort()).toEqual(ids(serverItems).sort());
+  });
+
+  it('treats the server list as confirmed, so moving away and back sends nothing', async () => {
+    const serverItems = [D, C, B, A];
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    respondList = () => Promise.resolve({ data: serverItems });
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+    expect(ids(result.current.items)).toEqual(ids(serverItems));
+
+    act(() => result.current.move(D.id, C.id));
+    act(() => result.current.move(D.id, C.id));
+    await advance(5000);
+
+    expect(requests).toHaveLength(1);
+  });
+
+  it('falls back to the confirmed order when the resync also fails', async () => {
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(listRequests).toEqual([LIST_PATH]);
     expect(ids(result.current.items)).toEqual(ids(INITIAL));
     expect(result.current.isSaving).toBe(false);
   });

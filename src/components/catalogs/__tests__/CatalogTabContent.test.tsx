@@ -167,6 +167,11 @@ beforeEach(() => {
       requests.push({ path, method: options.method, body });
 
       if (path === ORDER_PATH) return respondToOrder() as Promise<T>;
+      // The resync after a failed save; unreachable here, so the hook falls
+      // back to the confirmed order.
+      if (path === BASE_PATH && options.method === undefined) {
+        return Promise.reject(new Error('offline'));
+      }
       if (path === BASE_PATH && options.method === 'POST') {
         const { name } = body as { name: string };
         return Promise.resolve({ data: { id: CREATED.id, name } } as T);
