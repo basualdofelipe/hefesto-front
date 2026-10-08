@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import type { TiendanubeConfigAll } from '@/components/tiendanube-config/types';
 import { PAYMENT_METHOD_LABELS } from '@/components/tiendanube-config/types';
 import { TN_PLAN_ESENCIAL } from '@/constants/tiendanube';
+import { pickDefaultGatewaySlug } from '@/components/calculator/default-gateway';
 
 export interface GatewayConfig {
   gatewaySlug: string;
@@ -55,9 +56,10 @@ export function GatewaySelectors({
     [config.plans],
   );
 
-  // Raw user selections
-  const [selectedGateway, setSelectedGateway] = useState<string>(
-    activeGateways[0]?.slug ?? '',
+  // Raw user selections. Config arrives fully loaded from the RSC, so the
+  // initial state is enough to start on the default gateway.
+  const [selectedGateway, setSelectedGateway] = useState<string>(() =>
+    pickDefaultGatewaySlug(activeGateways),
   );
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [selectedDays, setSelectedDays] = useState<number>(-1);
