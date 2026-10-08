@@ -93,10 +93,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.backendToken = body.data.accessToken;
             token.permissions = body.data.user.permissions;
             token.userId = String(body.data.user.id);
+          } else {
+            // Never the email, the id token or the response body.
+            logger.warn(
+              { op: 'google-login', status: res.status },
+              'google login rejected by the backend',
+            );
           }
-        } catch {
-          // Backend unreachable — token won't have backendToken
-          // middleware.ts will redirect to /acceso-denegado on next navigation
+        } catch (error) {
+          // Backend unreachable or a reply of an unexpected shape. The token
+          // keeps no backendToken, so middleware.ts redirects to
+          // /acceso-denegado on the next navigation.
+          logger.error(
+            { op: 'google-login', err: describeError(error) },
+            'google login exchange failed',
+          );
         }
       }
 
