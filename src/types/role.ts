@@ -14,6 +14,11 @@ export interface RoleRow {
   canViewDashboard: boolean;
   canManageConfig: boolean;
   canManageUsers: boolean;
+  /**
+   * Computed by the back: true for ADMIN, whose permissions are always all on
+   * and cannot be edited. The client only paints it (D-19).
+   */
+  permissionsLocked: boolean;
   userCount: number;
 }
 
