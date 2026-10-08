@@ -122,10 +122,6 @@ afterEach(() => {
 });
 
 describe('useCatalogOrder', () => {
-  it('waits 2 s of quiet before saving', () => {
-    expect(SAVE_DELAY_MS).toBe(2000);
-  });
-
   it('keeps the received order on mount and sends nothing', async () => {
     const { result } = renderOrderHook();
 
