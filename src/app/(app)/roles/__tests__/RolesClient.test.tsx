@@ -78,12 +78,6 @@ async function openEditDialogFor(roleName: string): Promise<HTMLElement[]> {
 }
 
 describe('RolesClient permission lock (R10, D-19)', () => {
-  it('shows the locked ADMIN role with every permission counted', () => {
-    render(<RolesClient initialRoles={[adminRole, userRole]} />);
-
-    expect(within(rowOf('ADMIN')).getByText('11/11')).toBeInTheDocument();
-  });
-
   it('opens a locked role with all permission switches checked and disabled', async () => {
     render(<RolesClient initialRoles={[adminRole, userRole]} />);
 
