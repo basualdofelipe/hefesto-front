@@ -267,6 +267,18 @@ describe('useCatalogOrder', () => {
     expect(requests).toEqual([]);
   });
 
+  it('treats a created item as confirmed, so moving away and back sends nothing', async () => {
+    const { result } = renderOrderHook();
+
+    act(() => result.current.applyCreated(N));
+    act(() => result.current.move(A.id, B.id));
+    act(() => result.current.move(A.id, B.id));
+    await advance(5000);
+
+    expect(ids(result.current.items)).toEqual([...ids(INITIAL), N.id]);
+    expect(requests).toEqual([]);
+  });
+
   it('drops a deleted item from the PUT and never brings it back on revert', async () => {
     respond = () => Promise.reject(new Error('boom'));
     const { result } = renderOrderHook();
@@ -279,6 +291,18 @@ describe('useCatalogOrder', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].body.ids).toEqual([C.id, A.id, D.id]);
     expect(ids(result.current.items)).toEqual([A.id, C.id, D.id]);
+  });
+
+  it('treats a deleted item as confirmed, so moving away and back sends nothing', async () => {
+    const { result } = renderOrderHook();
+
+    act(() => result.current.applyDeleted(B.id));
+    act(() => result.current.move(A.id, C.id));
+    act(() => result.current.move(A.id, C.id));
+    await advance(5000);
+
+    expect(ids(result.current.items)).toEqual([A.id, C.id, D.id]);
+    expect(requests).toEqual([]);
   });
 
   it('keeps the position of a renamed item and sends nothing', async () => {
@@ -337,6 +361,22 @@ describe('useCatalogOrder', () => {
     await advance(SAVE_DELAY_MS);
     unmount();
     await advance(5000);
+
+    expect(requests).toHaveLength(1);
+  });
+
+  it('sends no second PUT when it unmounts while the save is in flight', async () => {
+    const put = deferred();
+    respond = () => put.promise;
+    const { result, unmount } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+    unmount();
+    await act(async () => {
+      put.resolve();
+      await put.promise;
+    });
 
     expect(requests).toHaveLength(1);
   });
