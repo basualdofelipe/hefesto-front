@@ -60,6 +60,23 @@ let respond: () => Promise<unknown>;
 // default, so a failed save falls back to the confirmed order.
 let listRequests: string[];
 let respondList: () => Promise<unknown>;
+// The structured logger writes warn lines here; silenced and read by the tests.
+let consoleWarn: jest.SpyInstance;
+
+interface WarnLine {
+  level: string;
+  msg: string;
+  op?: string;
+  dimension?: string;
+  err?: string;
+}
+
+/** Every console.warn call, parsed as the logger's JSON line. */
+function warnLines(): WarnLine[] {
+  return consoleWarn.mock.calls.map(
+    ([line]: unknown[]) => JSON.parse(String(line)) as WarnLine,
+  );
+}
 
 function ids(items: readonly CatalogItem[]): string[] {
   return items.map((item) => item.id);
@@ -95,6 +112,7 @@ beforeEach(() => {
   respond = () => Promise.resolve(undefined);
   listRequests = [];
   respondList = () => Promise.reject(new Error('offline'));
+  consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
   mockApiClientFetch.mockReset();
   mockApiClientFetch.mockImplementation(
     <T,>(
@@ -119,6 +137,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+  consoleWarn.mockRestore();
 });
 
 describe('useCatalogOrder', () => {
@@ -257,6 +276,52 @@ describe('useCatalogOrder', () => {
     expect(listRequests).toEqual([LIST_PATH]);
     expect(ids(result.current.items)).toEqual(ids(INITIAL));
     expect(result.current.isSaving).toBe(false);
+  });
+
+  it('logs a failed resync as one structured warn line', async () => {
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(warnLines()).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        op: 'catalog-reorder-resync',
+        dimension: DIMENSION,
+        err: 'offline',
+      }),
+    ]);
+  });
+
+  it('treats a list reply of an unexpected shape as a failed resync and logs it', async () => {
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    // apiClientFetch resolves undefined for an empty body.
+    respondList = () => Promise.resolve(undefined);
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(ids(result.current.items)).toEqual(ids(INITIAL));
+    expect(warnLines()).toEqual([
+      expect.objectContaining({
+        op: 'catalog-reorder-resync',
+        err: expect.stringContaining('unexpected shape'),
+      }),
+    ]);
+  });
+
+  it('logs nothing when the resync succeeds', async () => {
+    respond = () => Promise.reject(new Error(STALE_SET_MESSAGE));
+    respondList = () => Promise.resolve({ data: INITIAL });
+    const { result } = renderOrderHook();
+
+    act(() => result.current.move(A.id, C.id));
+    await advance(SAVE_DELAY_MS);
+
+    expect(warnLines()).toEqual([]);
   });
 
   it('is saving only while the PUT is in flight', async () => {

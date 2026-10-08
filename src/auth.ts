@@ -5,6 +5,7 @@ import type { Permissions } from '@/types/permissions';
 import { NO_PERMISSIONS } from '@/types/permissions';
 import { isDemoMode } from '@/constants/demo';
 import { selectAuthProviders } from '@/lib/auth-providers';
+import { describeError, logger } from '@/lib/logger';
 
 interface BackendAuthResponse {
   data: {
@@ -37,7 +38,14 @@ const credentials = Credentials({
           body: JSON.stringify({ email: credentials.email }),
         },
       );
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // Never the email, the token or the response body.
+        logger.warn(
+          { op: 'demo-login', status: res.status },
+          'demo login rejected by the backend',
+        );
+        return null;
+      }
       const body = (await res.json()) as BackendAuthResponse;
       return {
         backendToken: body.data.accessToken,
@@ -45,7 +53,12 @@ const credentials = Credentials({
         userId: String(body.data.user.id),
         email: body.data.user.email,
       };
-    } catch {
+    } catch (error) {
+      // Backend unreachable or a reply of an unexpected shape.
+      logger.error(
+        { op: 'demo-login', err: describeError(error) },
+        'demo login failed',
+      );
       return null;
     }
   },

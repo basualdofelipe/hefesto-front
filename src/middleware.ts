@@ -1,4 +1,5 @@
 import { auth } from '@/auth';
+import { logger } from '@/lib/logger';
 import type { Permissions } from '@/types/permissions';
 
 const ROUTE_PERMISSIONS: Record<string, keyof Permissions> = {
@@ -54,8 +55,9 @@ export const middleware = auth((req) => {
       req.auth.user &&
       !permissions
     ) {
-      console.warn(
-        '[middleware] WARNING: User authenticated but permissions undefined -- check auth.ts JWT/session callbacks',
+      logger.warn(
+        { op: 'route-permissions', requiredPermission },
+        'user authenticated but permissions undefined; check the auth.ts JWT/session callbacks',
       );
     }
 

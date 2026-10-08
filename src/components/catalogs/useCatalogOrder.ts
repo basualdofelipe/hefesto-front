@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 import { apiClientFetch } from '@/lib/api-client';
+import { describeError, logger } from '@/lib/logger';
 import { orderByIds, sameOrder } from '@/components/catalogs/catalog-order';
 
 /** Quiet time after the last move before the order is saved (D-06). */
@@ -98,18 +99,28 @@ export function useCatalogOrder(
    * After a failed save: a stale set (another session created or deleted a
    * row since this page loaded) is rejected on every later save until the
    * baseline matches the server again, so take the server's list as both the
-   * list and the confirmed order. If that read fails too, revert to the last
-   * confirmed order; the save's error toast has already told the user.
+   * list and the confirmed order. If that read fails too (or replies with an
+   * unexpected shape), log it and revert to the last confirmed order; the
+   * save's error toast has already told the user.
    */
   const rebaseOnServer = useCallback(async (): Promise<void> => {
     try {
-      const response = await apiClientFetch<CatalogListResponse>(
+      const response = await apiClientFetch<CatalogListResponse | undefined>(
         `/api/catalogs/${dimension}`,
         tokenRef.current,
       );
+      if (!Array.isArray(response?.data)) {
+        throw new TypeError(
+          `catalog list: unexpected shape (${typeof response?.data} data)`,
+        );
+      }
       confirmedIdsRef.current = response.data.map((item) => item.id);
       commit(response.data);
-    } catch {
+    } catch (error) {
+      logger.warn(
+        { op: 'catalog-reorder-resync', dimension, err: describeError(error) },
+        'resync after a failed reorder failed; reverting to the confirmed order',
+      );
       commit(orderByIds(itemsRef.current, confirmedIdsRef.current));
     }
   }, [dimension, commit]);
