@@ -3,6 +3,8 @@ import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
 import type { Permissions } from '@/types/permissions';
 import { NO_PERMISSIONS } from '@/types/permissions';
+import { isDemoMode } from '@/constants/demo';
+import { selectAuthProviders } from '@/lib/auth-providers';
 
 interface BackendAuthResponse {
   data: {
@@ -17,41 +19,40 @@ interface BackendAuthResponse {
   };
 }
 
+const credentials = Credentials({
+  credentials: { email: { type: 'text' } },
+  async authorize(credentials): Promise<{
+    backendToken: string;
+    permissions: Permissions;
+    userId: string;
+    email: string;
+  } | null> {
+    if (!credentials?.email) return null;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/demo-login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: credentials.email }),
+        },
+      );
+      if (!res.ok) return null;
+      const body = (await res.json()) as BackendAuthResponse;
+      return {
+        backendToken: body.data.accessToken,
+        permissions: body.data.user.permissions,
+        userId: String(body.data.user.id),
+        email: body.data.user.email,
+      };
+    } catch {
+      return null;
+    }
+  },
+});
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    Google,
-    Credentials({
-      credentials: { email: { type: 'text' } },
-      async authorize(credentials): Promise<{
-        backendToken: string;
-        permissions: Permissions;
-        userId: string;
-        email: string;
-      } | null> {
-        if (!credentials?.email) return null;
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/auth/demo-login`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: credentials.email }),
-            },
-          );
-          if (!res.ok) return null;
-          const body = (await res.json()) as BackendAuthResponse;
-          return {
-            backendToken: body.data.accessToken,
-            permissions: body.data.user.permissions,
-            userId: String(body.data.user.id),
-            email: body.data.user.email,
-          };
-        } catch {
-          return null;
-        }
-      },
-    }),
-  ],
+  providers: selectAuthProviders(isDemoMode(), { google: Google, credentials }),
   session: { strategy: 'jwt' },
   pages: {
     signIn: '/login',
