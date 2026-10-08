@@ -1,19 +1,34 @@
 'use client';
 
 import type { ReactElement, KeyboardEvent } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type ScreenReaderInstructions,
+  type UniqueIdentifier,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { Plus, Check, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClientFetch } from '@/lib/api-client';
-import { CatalogItemRow } from '@/components/catalogs/CatalogItemRow';
-
-interface CatalogItem {
-  id: string;
-  name: string;
-}
+import { SortableCatalogRow } from '@/components/catalogs/SortableCatalogRow';
+import {
+  useCatalogOrder,
+  type CatalogItem,
+} from '@/components/catalogs/useCatalogOrder';
 
 interface CatalogResponse {
   data: CatalogItem;
@@ -25,10 +40,35 @@ interface CatalogTabContentProps {
   canEdit: boolean;
 }
 
-function sortByName(items: CatalogItem[]): CatalogItem[] {
-  return [...items].sort((a, b) =>
-    a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
-  );
+const screenReaderInstructions: ScreenReaderInstructions = {
+  draggable:
+    'Para mover un ítem, presioná espacio o enter. Usá las flechas para elegir la nueva posición y espacio o enter para soltarlo. Escape cancela.',
+};
+
+/**
+ * Spanish drag announcements (D-04). They name the item and its position,
+ * never its id: dnd-kit's defaults would read the UUID aloud.
+ */
+function buildAnnouncements(items: CatalogItem[]): Announcements {
+  const total = items.length;
+  const nameOf = (id: UniqueIdentifier): string =>
+    items.find((item) => item.id === String(id))?.name ?? 'el ítem';
+  const positionOf = (id: UniqueIdentifier): number =>
+    items.findIndex((item) => item.id === String(id)) + 1;
+
+  return {
+    onDragStart: ({ active }) => `Tomaste ${nameOf(active.id)}.`,
+    onDragOver: ({ active, over }) =>
+      over
+        ? `${nameOf(active.id)} está en la posición ${positionOf(over.id)} de ${total}.`
+        : undefined,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? `Soltaste ${nameOf(active.id)} en la posición ${positionOf(over.id)} de ${total}.`
+        : `Soltaste ${nameOf(active.id)}.`,
+    onDragCancel: ({ active }) =>
+      `Se canceló el movimiento de ${nameOf(active.id)}.`,
+  };
 }
 
 export function CatalogTabContent({
@@ -39,7 +79,8 @@ export function CatalogTabContent({
   const { data: session } = useSession();
   const token = session?.accessToken ?? '';
 
-  const [items, setItems] = useState<CatalogItem[]>(sortByName(initialItems));
+  const { items, isSaving, move, applyCreated, applyUpdated, applyDeleted } =
+    useCatalogOrder(dimension, initialItems, token);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -58,7 +99,7 @@ export function CatalogTabContent({
           body: JSON.stringify({ name: trimmed }),
         },
       );
-      setItems((prev) => sortByName([...prev, response.data]));
+      applyCreated(response.data);
       setNewName('');
       setIsAdding(false);
       toast.success('Item creado');
@@ -81,9 +122,7 @@ export function CatalogTabContent({
           body: JSON.stringify({ name }),
         },
       );
-      setItems((prev) =>
-        sortByName(prev.map((item) => (item.id === id ? response.data : item))),
-      );
+      applyUpdated(response.data);
       toast.success('Item actualizado');
     } catch (error) {
       toast.error(
@@ -98,7 +137,7 @@ export function CatalogTabContent({
       await apiClientFetch(`/api/catalogs/${dimension}/${id}`, token, {
         method: 'DELETE',
       });
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      applyDeleted(id);
       toast.success('Item eliminado');
     } catch (error) {
       toast.error(
@@ -107,6 +146,14 @@ export function CatalogTabContent({
       throw error;
     }
   }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const announcements = useMemo(() => buildAnnouncements(items), [items]);
 
   function handleNewKeyDown(e: KeyboardEvent<HTMLInputElement>): void {
     if (e.key === 'Enter') {
@@ -177,15 +224,34 @@ export function CatalogTabContent({
             No hay items en este catalogo.
           </p>
         ) : (
-          items.map((item) => (
-            <CatalogItemRow
-              key={item.id}
-              item={item}
-              canEdit={canEdit}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          ))
+          // A stable id keeps dnd-kit's aria-describedby ids equal on server
+          // and client (no hydration mismatch with 7 contexts on one page).
+          <DndContext
+            id={`catalog-dnd-${dimension}`}
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            accessibility={{ announcements, screenReaderInstructions }}
+            onDragEnd={({ active, over }) => {
+              if (over) move(String(active.id), String(over.id));
+            }}
+          >
+            {/* Dragging is blocked only while the reorder PUT is in flight (D-06). */}
+            <SortableContext
+              items={items.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+              disabled={isSaving}
+            >
+              {items.map((item) => (
+                <SortableCatalogRow
+                  key={item.id}
+                  item={item}
+                  canEdit={canEdit}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </div>

@@ -124,16 +124,30 @@ async function advance(ms: number): Promise<void> {
   });
 }
 
-async function keyboardMoveFirstRowDown(): Promise<void> {
+/** Text of dnd-kit's live region, which screen readers speak. */
+function announcement(): string {
+  return document.querySelector('[id^="DndLiveRegion"]')?.textContent ?? '';
+}
+
+interface KeyboardMoveAnnouncements {
+  lifted: string;
+  moved: string;
+  dropped: string;
+}
+
+async function keyboardMoveFirstRowDown(): Promise<KeyboardMoveAnnouncements> {
   const [first] = handles();
   act(() => first.focus());
   fireEvent.keyDown(first, { code: 'Space', key: ' ' });
   // The keyboard sensor attaches its document listeners on a 0 ms timeout.
   await advance(0);
+  const lifted = announcement();
   fireEvent.keyDown(first, { code: 'ArrowDown', key: 'ArrowDown' });
   await advance(0);
+  const moved = announcement();
   fireEvent.keyDown(first, { code: 'Space', key: ' ' });
   await advance(0);
+  return { lifted, moved, dropped: announcement() };
 }
 
 beforeEach(() => {
@@ -278,9 +292,16 @@ describe('CatalogTabContent', () => {
     mockRowRects();
     renderTab([M, XS, L]);
 
-    await keyboardMoveFirstRowDown();
+    const spoken = await keyboardMoveFirstRowDown();
 
     expect(rowOrder()).toEqual(['XS', 'M', 'L']);
+    // Spanish announcements name the item and its position, never its UUID.
+    // On lift dnd-kit reports the row as over its own slot right away, so
+    // the start message may already be replaced; it still names the item.
+    expect(spoken.lifted).toMatch(/M/);
+    expect(spoken.lifted).not.toContain(M.id);
+    expect(spoken.moved).toBe('M está en la posición 2 de 3.');
+    expect(spoken.dropped).toBe('Soltaste M en la posición 2 de 3.');
     expect(orderRequests()).toHaveLength(0);
     await advance(2000);
     expect(orderRequests()).toEqual([
