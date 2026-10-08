@@ -5,6 +5,7 @@ import { auth, signIn } from '@/auth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/constants/branding';
+import { isDemoMode } from '@/constants/demo';
 import { DemoLoginButton } from './DemoLoginButton';
 
 interface LoginPageProps {
@@ -66,29 +67,20 @@ export default async function LoginPage({
         </p>
       </CardHeader>
       <CardContent>
-        <form action={handleGoogleSignIn}>
-          <Button
-            type='submit'
-            variant='outline'
-            size='lg'
-            className='w-full gap-3'
-          >
-            <GoogleIcon />
-            Ingresar con Google
-          </Button>
-        </form>
-        {process.env.NEXT_PUBLIC_DEMO_LOGIN_ENABLED === 'true' && (
-          <>
-            <div className='relative my-3'>
-              <div className='absolute inset-0 flex items-center'>
-                <span className='w-full border-t' />
-              </div>
-              <div className='relative flex justify-center text-xs uppercase'>
-                <span className='bg-card text-muted-foreground px-2'>o</span>
-              </div>
-            </div>
-            <DemoLoginButton />
-          </>
+        {isDemoMode() ? (
+          <DemoLoginButton />
+        ) : (
+          <form action={handleGoogleSignIn}>
+            <Button
+              type='submit'
+              variant='outline'
+              size='lg'
+              className='w-full gap-3'
+            >
+              <GoogleIcon />
+              Ingresar con Google
+            </Button>
+          </form>
         )}
       </CardContent>
     </Card>
