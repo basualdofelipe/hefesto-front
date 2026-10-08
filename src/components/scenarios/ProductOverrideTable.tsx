@@ -92,15 +92,13 @@ export function ProductOverrideTable({
     [calcResults],
   );
 
-  // Sort: active first, then by type name, then by product name
-  const sortedProducts = useMemo(
-    () =>
-      [...products].sort((a, b) => {
-        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
-        const typeCmp = a.type.name.localeCompare(b.type.name);
-        if (typeCmp !== 0) return typeCmp;
-        return a.name.name.localeCompare(b.name.name);
-      }),
+  // Active first, inactive after. Inside each part, products keep the catalog
+  // order the API sends (D-11): a stable partition, no name comparison.
+  const orderedProducts = useMemo(
+    (): Product[] => [
+      ...products.filter((product) => product.isActive),
+      ...products.filter((product) => !product.isActive),
+    ],
     [products],
   );
 
@@ -123,7 +121,7 @@ export function ProductOverrideTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedProducts.map((product) => {
+          {orderedProducts.map((product) => {
             const hasOverride = overrides[product.id] !== undefined;
             const result = resultsMap.get(product.id);
             const simProfit = result?.simResult?.realProfit ?? 0;
