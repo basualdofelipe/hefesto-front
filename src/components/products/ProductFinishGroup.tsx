@@ -160,7 +160,7 @@ export function ProductFinishGroup({
                             </Tooltip>
                           </TooltipProvider>
                         ) : (
-                          <span className='flex items-center gap-1'>
+                          <span className='flex items-center justify-end gap-1'>
                             {formatCost(product.cost)}
                             {product.costWarnings.length > 0 && (
                               <TooltipProvider>

@@ -70,7 +70,9 @@ export function getProductDisplayName(product: Product): string {
 
 export function formatSellingPrice(price: number | null): string {
   if (price === null) return '\u2014';
-  return `$${price.toLocaleString('es-AR')}`;
+  // The API sends decimal columns as strings ("150000.00"); without Number()
+  // toLocaleString is String's and returns it unformatted.
+  return `$${Number(price).toLocaleString('es-AR')}`;
 }
 
 export function formatCost(cost: number | null): string {
