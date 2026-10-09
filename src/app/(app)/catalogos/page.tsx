@@ -41,7 +41,9 @@ export default async function CatalogosPage(): Promise<ReactElement> {
       </div>
 
       <Tabs defaultValue={DIMENSIONS[0].key}>
-        <TabsList className='flex-wrap'>
+        {/* Seven tabs wrap to a second row on phones; the list's fixed h-9
+            would let that row spill over the content, so it grows instead. */}
+        <TabsList className='flex-wrap group-data-[orientation=horizontal]/tabs:h-auto'>
           {DIMENSIONS.map((d) => (
             <TabsTrigger key={d.key} value={d.key}>
               {d.label}
