@@ -1,6 +1,5 @@
 import { auth } from '@/auth';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { getServerApiUrl } from '@/lib/server-api-url';
 
 export async function apiFetch<T>(
   path: string,
@@ -12,7 +11,7 @@ export async function apiFetch<T>(
     throw new Error('No authenticated session');
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${getServerApiUrl()}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

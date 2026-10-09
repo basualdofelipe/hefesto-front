@@ -9,6 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  output: 'standalone',
   reactStrictMode: true,
   turbopack: {},
   webpack(config, { dev }) {

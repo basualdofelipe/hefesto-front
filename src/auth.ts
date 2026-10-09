@@ -6,6 +6,7 @@ import { NO_PERMISSIONS } from '@/types/permissions';
 import { isDemoMode } from '@/constants/demo';
 import { selectAuthProviders } from '@/lib/auth-providers';
 import { describeError, logger } from '@/lib/logger';
+import { getServerApiUrl } from '@/lib/server-api-url';
 
 interface BackendAuthResponse {
   data: {
@@ -30,14 +31,11 @@ const credentials = Credentials({
   } | null> {
     if (!credentials?.email) return null;
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/demo-login`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: credentials.email }),
-        },
-      );
+      const res = await fetch(`${getServerApiUrl()}/api/auth/demo-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: credentials.email }),
+      });
       if (!res.ok) {
         // Never the email, the token or the response body.
         logger.warn(
@@ -80,14 +78,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, account, user }): Promise<typeof token> {
       if (account?.provider === 'google') {
         try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idToken: account.id_token }),
-            },
-          );
+          const res = await fetch(`${getServerApiUrl()}/api/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: account.id_token }),
+          });
           if (res.ok) {
             const body = (await res.json()) as BackendAuthResponse;
             token.backendToken = body.data.accessToken;
